@@ -310,6 +310,7 @@ let sortCol = 'DMAS120';
 let sortDir = 'desc';
 let filterEmp = 'ALL';
 let filterEdad = 'ALL';
+let filterConcepto = 'ALL';
 let searchQ = '';
 let charts = {};
 
@@ -449,9 +450,10 @@ function applyFilters() {
   filtered = allData.filter(r => {
     const matchEmp = filterEmp === 'ALL' || r.EMPRESA === filterEmp;
     const matchEdad = filterEdad === 'ALL' || getEdadBucket(r) === filterEdad;
+    const matchConcepto = filterConcepto === 'ALL' || r.CONCEPTO === filterConcepto;
     const q = searchQ.toLowerCase();
     const matchQ = !q || (r.PLACA||'').toLowerCase().includes(q) || (r.NOMBRE||'').toLowerCase().includes(q);
-    return matchEmp && matchEdad && matchQ;
+    return matchEmp && matchEdad && matchConcepto && matchQ;
   });
   filtered.sort((a, b) => {
     const av = a[sortCol] !== undefined ? a[sortCol] : (a[sortCol] || '');
@@ -580,6 +582,11 @@ function render() {
       ${Object.keys(byEmp).map(e => `<button class="filter-btn ${filterEmp===e?'active':''}" onclick="setFilterEmp('${e}')">${EMP_CONFIG[e]?.label||e}</button>`).join('')}
     </div>
     <div class="filter-row">
+      <span class="filter-label">Concepto:</span>
+      <button class="filter-btn ${filterConcepto==='ALL'?'active':''}" onclick="setFilterConcepto('ALL')">Todos</button>
+      ${[...new Set(allData.map(r=>r.CONCEPTO).filter(Boolean))].sort().map(c => `<button class="filter-btn ${filterConcepto===c?'active':''}" onclick="setFilterConcepto('${c.replace(/'/g,"\\'")}')" title="${c}">${c.length>22?c.substring(0,22)+'…':c}</button>`).join('')}
+    </div>
+    <div class="filter-row">
       <span class="filter-label">Tramo:</span>
       ${['ALL','AL_DIA','30','60','90','120','+120'].map(t => `<button class="filter-btn ${filterEdad===t?'active':''}" onclick="setFilterEdad('${t}')">${t==='ALL'?'Todos':t==='AL_DIA'?'Al día':t+' días'}</button>`).join('')}
     </div>
@@ -705,6 +712,7 @@ function renderTabla() {
     { key: 'PLACA', label: 'Placa / ID' },
     { key: 'NOMBRE', label: 'Nombre' },
     { key: 'EMPRESA', label: 'Empresa' },
+    { key: 'CONCEPTO', label: 'Concepto' },
     { key: 'AL_DIA', label: 'Al día' },
     { key: 'D30', label: '30d' },
     { key: 'D60', label: '60d' },
@@ -727,6 +735,7 @@ function renderTabla() {
           <td class="placa">${r.PLACA || '—'}</td>
           <td>${r.NOMBRE || '—'}</td>
           <td><span class="badge ${cfg.badge}">${cfg.label}</span></td>
+          <td style="color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${r.CONCEPTO||''}">${r.CONCEPTO || '—'}</td>
           <td class="num ok">${r.AL_DIA > 0 ? fCOP(r.AL_DIA) : '—'}</td>
           <td class="num">${r.D30 > 0 ? fCOP(r.D30) : '—'}</td>
           <td class="num warn">${r.D60 > 0 ? fCOP(r.D60) : '—'}</td>
@@ -760,6 +769,7 @@ function renderTabla() {
 // ============================================================
 function setFilterEmp(e) { filterEmp = e; applyFilters(); render(); }
 function setFilterEdad(e) { filterEdad = e; applyFilters(); renderTabla(); }
+function setFilterConcepto(c) { filterConcepto = c; applyFilters(); renderTabla(); }
 function onSearch(v) { searchQ = v; applyFilters(); renderTabla(); }
 function setSort(col) {
   if (sortCol === col) sortDir = sortDir === 'desc' ? 'asc' : 'desc';
