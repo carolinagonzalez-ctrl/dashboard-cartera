@@ -354,88 +354,73 @@ async function loadData() {
 }
 
 function parseCSV(csv) {
-  const lines = csv.trim().split('\n');
-  if (lines.length < 2) return [];
+  // Parser robusto: maneja celdas con saltos de línea, comas y comillas internas
+  const records = parseCSVRobust(csv);
+  if (records.length < 2) return [];
+
   function parseNum(v) {
     if (!v) return 0;
     let s = String(v).replace(/\s/g,'').replace(/"/g,'').replace(/\$/g,'');
-    if (!s || s === '-' || s === '') return 0;
-
-    // Detectar formato: si tiene punto Y coma, el último separador es el decimal
-    const hasDot  = s.includes('.');
+    if (!s || s === '-') return 0;
+    const hasDot = s.includes('.');
     const hasComma = s.includes(',');
-
     if (hasDot && hasComma) {
-      // Ej: 12.560,00 (COP) → quitar puntos, cambiar coma por punto
-      const lastDot   = s.lastIndexOf('.');
-      const lastComma = s.lastIndexOf(',');
-      if (lastComma > lastDot) {
-        // coma es decimal: 12.560,00
+      if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
         s = s.replace(/\./g,'').replace(',','.');
       } else {
-        // punto es decimal: 12,560.00
         s = s.replace(/,/g,'');
       }
     } else if (hasComma && !hasDot) {
-      // Solo coma: puede ser decimal (660,00) o miles (12,560)
       const parts = s.split(',');
       if (parts.length === 2 && parts[1].length === 3) {
-        // miles: 12,560
         s = s.replace(/,/g,'');
       } else {
-        // decimal: 660,00
         s = s.replace(',','.');
       }
     } else if (hasDot && !hasComma) {
-      // Solo punto: puede ser decimal (660.00) o miles (12.560)
       const parts = s.split('.');
       if (parts.length === 2 && parts[1].length === 3) {
-        // miles: 12.560
         s = s.replace(/\./g,'');
       }
-      // si no, lo deja como está (decimal normal)
     }
-
     return parseFloat(s) || 0;
   }
 
-  const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toUpperCase());
+  const rawHeaders = records[0].map(h => h.replace(/"/g,'').trim());
+  const headers = rawHeaders.map(h => h.toUpperCase());
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = splitCSVLine(lines[i]);
-    if (vals.length < 5) continue;
+
+  console.log('=== DEBUG CARTERA ===');
+  console.log('Total filas CSV:', records.length - 1);
+  console.log('Headers detectados:', headers);
+
+  for (let i = 1; i < records.length; i++) {
+    const vals = records[i];
     const row = {};
+    rawHeaders.forEach((h, idx) => { row[h] = (vals[idx] || '').replace(/"/g,'').trim(); });
     headers.forEach((h, idx) => { row[h] = (vals[idx] || '').replace(/"/g,'').trim(); });
-    // También guardar con keys originales en minúscula para el mapeo
-    lines[0].split(',').map(h=>h.replace(/"/g,'').trim()).forEach((h,idx)=>{
-      row[h] = (vals[idx]||'').replace(/"/g,'').trim();
-    });
-    // Mapear encabezados reales del Sheets a nombres internos
-    // Encabezados reales: PLACA, Concepto, Documento, Nombre, Apellidos, Direccion, Telefono, Anticipo,
-    //                     al dia, 30 dias, 60 dias, 90 dias, 120 dias, mas de 120 dias, total
+
     const mapped = {};
     mapped['PLACA']    = row['PLACA'] || row['placa'] || '';
     mapped['CONCEPTO'] = row['CONCEPTO'] || row['Concepto'] || row['concepto'] || '';
     mapped['NOMBRE']   = ((row['NOMBRE'] || row['Nombre'] || '') + ' ' + (row['APELLIDOS'] || row['Apellidos'] || '')).trim();
     mapped['EMPRESA']  = row['EMPRESA'] || row['Empresa'] || '';
-    mapped['AL_DIA']   = parseNum(row['AL DIA'] || row['al dia'] || row['AL_DIA'] || row['ALDIA'] || '0');
-    mapped['D30']      = parseNum(row['30 DIAS'] || row['30 dias'] || row['D30'] || '0');
-    mapped['D60']      = parseNum(row['60 DIAS'] || row['60 dias'] || row['D60'] || '0');
-    mapped['D90']      = parseNum(row['90 DIAS'] || row['90 dias'] || row['D90'] || '0');
-    mapped['D120']     = parseNum(row['120 DIAS'] || row['120 dias'] || row['D120'] || '0');
-    mapped['DMAS120']  = parseNum(row['MAS DE 120 DIAS'] || row['mas de 120 dias'] || row['DMAS120'] || '0');
-    mapped['TOTAL']    = parseNum(row['TOTAL'] || row['total'] || '0');
+    mapped['AL_DIA']   = parseNum(row['AL DIA'] || row['al dia'] || row['AL_DIA'] || '');
+    mapped['D30']      = parseNum(row['30 DIAS'] || row['30 dias'] || row['D30'] || '');
+    mapped['D60']      = parseNum(row['60 DIAS'] || row['60 dias'] || row['D60'] || '');
+    mapped['D90']      = parseNum(row['90 DIAS'] || row['90 dias'] || row['D90'] || '');
+    mapped['D120']     = parseNum(row['120 DIAS'] || row['120 dias'] || row['D120'] || '');
+    mapped['DMAS120']  = parseNum(row['MAS DE 120 DIAS'] || row['mas de 120 dias'] || row['DMAS120'] || '');
+    mapped['TOTAL']    = parseNum(row['TOTAL'] || row['total'] || '');
 
     if (!mapped['PLACA'] && !mapped['NOMBRE']) continue;
 
-    // Auto-detectar empresa desde concepto si no viene en columna
     if (!mapped['EMPRESA']) {
       mapped['EMPRESA'] = detectEmpresa(mapped['CONCEPTO']);
     } else {
       mapped['EMPRESA'] = normalizeEmpresa(mapped['EMPRESA']);
     }
 
-    // Calcular total si viene en 0
     if (mapped['TOTAL'] === 0) {
       mapped['TOTAL'] = mapped['AL_DIA'] + mapped['D30'] + mapped['D60'] + mapped['D90'] + mapped['D120'] + mapped['DMAS120'];
     }
@@ -443,28 +428,67 @@ function parseCSV(csv) {
     Object.assign(row, mapped);
     rows.push(row);
   }
-  // DEBUG consola — ver RAW vs parseado en primeras 2 filas
-  if (rows.length > 0) {
-    console.log('=== DEBUG CARTERA ===');
-    console.log('RAW línea 1:', lines[1] || '');
-    console.log('RAW línea 2:', lines[2] || '');
-    console.table(rows.slice(0,2).map(r => ({
-      PLACA: r.PLACA, CONCEPTO: r.CONCEPTO, EMPRESA: r.EMPRESA,
-      AL_DIA: r.AL_DIA, D120: r.D120, DMAS120: r.DMAS120, TOTAL: r.TOTAL
-    })));
-  }
+
+  console.log('Registros válidos parseados:', rows.length);
   return rows;
 }
 
-function splitCSVLine(line) {
-  const result = []; let cur = ''; let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    if (line[i] === '"') { inQ = !inQ; continue; }
-    if (line[i] === ',' && !inQ) { result.push(cur); cur = ''; continue; }
-    cur += line[i];
+// Parser CSV estándar RFC 4180 — maneja comillas, comas y saltos de línea dentro de celdas
+function parseCSVRobust(text) {
+  const records = [];
+  let record = [];
+  let field = '';
+  let inQuotes = false;
+  let i = 0;
+  const n = text.length;
+
+  while (i < n) {
+    const ch = text[i];
+
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < n && text[i+1] === '"') {
+          // comilla escapada ""
+          field += '"';
+          i += 2;
+        } else {
+          // cierre de comillas
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        field += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+        i++;
+      } else if (ch === ',') {
+        record.push(field);
+        field = '';
+        i++;
+      } else if (ch === '\n') {
+        record.push(field);
+        field = '';
+        records.push(record);
+        record = [];
+        i++;
+      } else if (ch === '\r') {
+        // saltar \r de Windows
+        i++;
+      } else {
+        field += ch;
+        i++;
+      }
+    }
   }
-  result.push(cur);
-  return result;
+  // última celda y fila
+  if (field || record.length > 0) {
+    record.push(field);
+    records.push(record);
+  }
+  return records.filter(r => r.some(c => c.trim() !== ''));
 }
 
 function detectEmpresa(concepto) {
