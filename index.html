@@ -336,6 +336,16 @@ async function loadData() {
       return;
     }
     document.getElementById('lastUpdate').textContent = 'Actualizado: ' + new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
+    // DEBUG: mostrar primeras 2 filas en consola para verificar parsing
+    if (allData.length > 0) {
+      const sample = allData.slice(0,2);
+      console.table(sample.map(r => ({
+        PLACA: r.PLACA, CONCEPTO: r.CONCEPTO,
+        AL_DIA: r.AL_DIA, D30: r.D30, D60: r.D60,
+        D90: r.D90, D120: r.D120, DMAS120: r.DMAS120, TOTAL: r.TOTAL
+      })));
+      console.log('RAW primera fila:', lines[1]);
+    }
     applyFilters();
     render();
   } catch (err) {
@@ -352,7 +362,46 @@ function parseCSV(csv) {
   const lines = csv.trim().split('\n');
   if (lines.length < 2) return [];
   function parseNum(v) {
-    return parseFloat((v||'0').replace(/[$,.]/g,'').replace(/\s/g,'')) || 0;
+    if (!v) return 0;
+    let s = String(v).replace(/\s/g,'').replace(/"/g,'').replace(/\$/g,'');
+    if (!s || s === '-' || s === '') return 0;
+
+    // Detectar formato: si tiene punto Y coma, el último separador es el decimal
+    const hasDot  = s.includes('.');
+    const hasComma = s.includes(',');
+
+    if (hasDot && hasComma) {
+      // Ej: 12.560,00 (COP) → quitar puntos, cambiar coma por punto
+      const lastDot   = s.lastIndexOf('.');
+      const lastComma = s.lastIndexOf(',');
+      if (lastComma > lastDot) {
+        // coma es decimal: 12.560,00
+        s = s.replace(/\./g,'').replace(',','.');
+      } else {
+        // punto es decimal: 12,560.00
+        s = s.replace(/,/g,'');
+      }
+    } else if (hasComma && !hasDot) {
+      // Solo coma: puede ser decimal (660,00) o miles (12,560)
+      const parts = s.split(',');
+      if (parts.length === 2 && parts[1].length === 3) {
+        // miles: 12,560
+        s = s.replace(/,/g,'');
+      } else {
+        // decimal: 660,00
+        s = s.replace(',','.');
+      }
+    } else if (hasDot && !hasComma) {
+      // Solo punto: puede ser decimal (660.00) o miles (12.560)
+      const parts = s.split('.');
+      if (parts.length === 2 && parts[1].length === 3) {
+        // miles: 12.560
+        s = s.replace(/\./g,'');
+      }
+      // si no, lo deja como está (decimal normal)
+    }
+
+    return parseFloat(s) || 0;
   }
 
   const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toUpperCase());
