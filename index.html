@@ -336,16 +336,6 @@ async function loadData() {
       return;
     }
     document.getElementById('lastUpdate').textContent = 'Actualizado: ' + new Date().toLocaleString('es-CO', {dateStyle:'short', timeStyle:'short'});
-    // DEBUG: mostrar primeras 2 filas en consola para verificar parsing
-    if (allData.length > 0) {
-      const sample = allData.slice(0,2);
-      console.table(sample.map(r => ({
-        PLACA: r.PLACA, CONCEPTO: r.CONCEPTO,
-        AL_DIA: r.AL_DIA, D30: r.D30, D60: r.D60,
-        D90: r.D90, D120: r.D120, DMAS120: r.DMAS120, TOTAL: r.TOTAL
-      })));
-      console.log('RAW primera fila:', lines[1]);
-    }
     applyFilters();
     render();
   } catch (err) {
@@ -447,6 +437,16 @@ function parseCSV(csv) {
 
     Object.assign(row, mapped);
     rows.push(row);
+  }
+  // DEBUG consola — ver RAW vs parseado en primeras 2 filas
+  if (rows.length > 0) {
+    console.log('=== DEBUG CARTERA ===');
+    console.log('RAW línea 1:', lines[1] || '');
+    console.log('RAW línea 2:', lines[2] || '');
+    console.table(rows.slice(0,2).map(r => ({
+      PLACA: r.PLACA, CONCEPTO: r.CONCEPTO, EMPRESA: r.EMPRESA,
+      AL_DIA: r.AL_DIA, D120: r.D120, DMAS120: r.DMAS120, TOTAL: r.TOTAL
+    })));
   }
   return rows;
 }
