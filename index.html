@@ -527,15 +527,22 @@ function normalizeEmpresa(e) {
 function applyFilters() {
   filtered = allData.filter(r => {
     const matchEmp = filterEmp === 'ALL' || r.EMPRESA === filterEmp;
-    const matchEdad = filterEdad === 'ALL' || getEdadBucket(r) === filterEdad;
     const matchConcepto = filterConcepto === 'ALL' || r.CONCEPTO === filterConcepto;
+    // Tramo: mostrar registros que TIENEN saldo > 0 en ese tramo
+    let matchEdad = true;
+    if (filterEdad === 'AL_DIA') matchEdad = r.AL_DIA > 0;
+    else if (filterEdad === '30')  matchEdad = r.D30 > 0;
+    else if (filterEdad === '60')  matchEdad = r.D60 > 0;
+    else if (filterEdad === '90')  matchEdad = r.D90 > 0;
+    else if (filterEdad === '120') matchEdad = r.D120 > 0;
+    else if (filterEdad === '+120') matchEdad = r.DMAS120 > 0;
     const q = searchQ.toLowerCase();
     const matchQ = !q || (r.PLACA||'').toLowerCase().includes(q) || (r.NOMBRE||'').toLowerCase().includes(q);
     return matchEmp && matchEdad && matchConcepto && matchQ;
   });
   filtered.sort((a, b) => {
-    const av = a[sortCol] !== undefined ? a[sortCol] : (a[sortCol] || '');
-    const bv = b[sortCol] !== undefined ? b[sortCol] : (b[sortCol] || '');
+    const av = a[sortCol] !== undefined ? a[sortCol] : '';
+    const bv = b[sortCol] !== undefined ? b[sortCol] : '';
     if (typeof av === 'number') return sortDir === 'desc' ? bv - av : av - bv;
     return sortDir === 'desc' ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
   });
@@ -674,6 +681,8 @@ function render() {
       <input class="search-input" id="searchInput" placeholder="Buscar por placa o nombre..." oninput="onSearch(this.value)" value="${searchQ}">
     </div>
 
+    <div id="filtroResumen"></div>
+
     <div class="table-card" id="tableCard"></div>
   `;
 
@@ -778,7 +787,61 @@ function renderChartEmp(byEmp) {
 // ============================================================
 // TABLA
 // ============================================================
+function renderFiltroResumen() {
+  const el = document.getElementById('filtroResumen');
+  if (!el) return;
+  const t = calcTotals(filtered);
+  const hayFiltro = filterEmp !== 'ALL' || filterEdad !== 'ALL' || filterConcepto !== 'ALL' || searchQ;
+  const etiquetas = [];
+  if (filterEmp !== 'ALL') etiquetas.push(EMP_CONFIG[filterEmp]?.label || filterEmp);
+  if (filterConcepto !== 'ALL') etiquetas.push(filterConcepto);
+  if (filterEdad !== 'ALL') etiquetas.push(filterEdad === 'AL_DIA' ? 'Al día' : filterEdad + ' días');
+  if (searchQ) etiquetas.push(`"${searchQ}"`);
+
+  el.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+      <div style="font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em">
+        ${hayFiltro ? '📊 Filtro activo: ' + etiquetas.join(' · ') : '📊 Totales generales'}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-left:auto">
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">Registros</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${filtered.length.toLocaleString('es-CO')}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">Al Día</div>
+          <div style="font-size:16px;font-weight:700;color:var(--green)" title="${fFull(t.aldia)}">${fCOP(t.aldia)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">30d</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)" title="${fFull(t.d30)}">${fCOP(t.d30)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">60d</div>
+          <div style="font-size:16px;font-weight:700;color:#f5c542" title="${fFull(t.d60)}">${fCOP(t.d60)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">90d</div>
+          <div style="font-size:16px;font-weight:700;color:#f58c42" title="${fFull(t.d90)}">${fCOP(t.d90)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">120d</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.d120)}">${fCOP(t.d120)}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:var(--text2)">+120d</div>
+          <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.dmas120)}">${fCOP(t.dmas120)}</div>
+        </div>
+        <div style="text-align:center;border-left:1px solid var(--border);padding-left:12px">
+          <div style="font-size:11px;color:var(--text2)">TOTAL</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text)" title="${fFull(t.total)}">${fCOP(t.total)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderTabla() {
+  renderFiltroResumen();
   const card = document.getElementById('tableCard');
   if (!card) return;
   const total = filtered.length;
