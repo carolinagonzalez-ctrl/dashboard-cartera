@@ -185,6 +185,7 @@
   }
   .badge-tf { background: rgba(74,144,226,.15); color: #4a90e2; }
   .badge-real { background: rgba(245,197,66,.12); color: #f5c542; }
+  .badge-micro { background: rgba(245,140,66,.12); color: #f58c42; }
   .badge-celu { background: rgba(0,212,138,.12); color: var(--green); }
   .badge-otro { background: rgba(138,147,170,.1); color: var(--text2); }
 
@@ -294,10 +295,11 @@ const ROWS_PER_PAGE = 25;
 
 // Mapeo de empresas para badges
 const EMP_CONFIG = {
-  'TF':   { label: 'Taxis Ya TF',     badge: 'badge-tf',   color: '#4a90e2' },
-  'REAL': { label: 'Real Transportadora', badge: 'badge-real', color: '#f5c542' },
-  'CELU': { label: 'Celu Vans',        badge: 'badge-celu',  color: '#00d48a' },
-  'OTRO': { label: 'Otros',            badge: 'badge-otro',  color: '#8a93aa' },
+  'TF':         { label: 'Taxis Ya TF',       badge: 'badge-tf',       color: '#4a90e2' },
+  'REAL_TAXI':  { label: 'Real — Taxis',       badge: 'badge-real',     color: '#f5c542' },
+  'REAL_MICRO': { label: 'Real — Microbuses',  badge: 'badge-micro',    color: '#f58c42' },
+  'CELU':       { label: 'Celu Vans',          badge: 'badge-celu',     color: '#00d48a' },
+  'VARIOS':     { label: 'Varios',             badge: 'badge-otro',     color: '#8a93aa' },
 };
 
 // Estado global
@@ -411,19 +413,33 @@ function splitCSVLine(line) {
 }
 
 function detectEmpresa(concepto) {
-  const c = concepto.toUpperCase();
-  if (c.includes('TF') || c.includes('TAXIS YA') || c.includes('FRECUENCIA')) return 'TF';
-  if (c.includes('REAL') || c.includes('MICROBUS')) return 'REAL';
-  if (c.includes('CELU') || c.includes('VAN')) return 'CELU';
-  return 'OTRO';
+  const c = concepto.toUpperCase().trim();
+  // Mapeo exacto por concepto
+  if (c === 'RODAMIENTO-(TF)')                        return 'TF';
+  if (c === 'SERVICIO AL AFILIADO')                   return 'TF';
+  if (c === 'SERVICIO AL AFILIADO ADICIONAL')         return 'TF';
+  if (c === 'FRECUENCIA (ESP)')                       return 'TF';
+  if (c === 'RODAMIENTO REAL')                        return 'REAL_TAXI';
+  if (c === 'RODAMIENTO MICROBUSES')                  return 'REAL_MICRO';
+  if (c === 'RCC RCE 2022 REAL ESPEC. CAMIONETAS -VANS') return 'REAL_MICRO';
+  if (c === 'RODAMIENTO-CELUVANS')                    return 'CELU';
+  if (c === 'CREDITO SEGUROS CELU')                   return 'CELU';
+  if (c === 'RCC RCE AP BUS/BUSETA 2024')             return 'CELU';
+  // Parciales como fallback
+  if (c.includes('TF') || c.includes('FRECUENCIA'))  return 'TF';
+  if (c.includes('MICROBUS'))                        return 'REAL_MICRO';
+  if (c.includes('REAL'))                            return 'REAL_TAXI';
+  if (c.includes('CELU') || c.includes('VAN'))       return 'CELU';
+  return 'VARIOS';
 }
 
 function normalizeEmpresa(e) {
-  const u = e.toUpperCase();
-  if (u.includes('TF') || u.includes('TAXI')) return 'TF';
-  if (u.includes('REAL')) return 'REAL';
-  if (u.includes('CELU') || u.includes('VAN')) return 'CELU';
-  return 'OTRO';
+  const u = e.toUpperCase().trim();
+  if (u.includes('TF') || u.includes('TAXIS YA')) return 'TF';
+  if (u.includes('MICRO'))                         return 'REAL_MICRO';
+  if (u.includes('REAL'))                          return 'REAL_TAXI';
+  if (u.includes('CELU') || u.includes('VAN'))     return 'CELU';
+  return 'VARIOS';
 }
 
 // ============================================================
