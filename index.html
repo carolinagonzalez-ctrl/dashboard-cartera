@@ -353,6 +353,102 @@ async function loadData() {
   }
 }
 
+// ============================================================
+// TELÉFONO — limpia y formatea para WhatsApp
+// ============================================================
+function limpiarTel(v) {
+  if (!v) return '';
+  let t = String(v).replace(/[^\d+]/g, ''); // solo dígitos y +
+  if (t.startsWith('57') && t.length === 12) t = '+' + t;
+  else if (t.startsWith('+57')) { /* ya está bien */ }
+  else if (t.length === 10 && t.startsWith('3')) t = '+57' + t;
+  else if (t.length > 0) t = '+57' + t.replace(/^\+?57/, '');
+  return t;
+}
+
+function linkWhatsApp(tel, nombre, total) {
+  if (!tel) return '—';
+  const msg = encodeURIComponent(`Hola ${nombre}, le informamos que tiene una deuda pendiente de ${fFull(total)}. Por favor comuníquese con nosotros para gestionar su pago. Gracias.`);
+  return `https://wa.me/${tel.replace('+','')}?text=${msg}`;
+}
+
+// ============================================================
+// EXPORTAR EXCEL (CSV con BOM para Excel colombiano)
+// ============================================================
+function exportarExcel() {
+  if (!filtered || filtered.length === 0) {
+    alert('No hay registros para exportar con el filtro actual.');
+    return;
+  }
+
+  const cols = [
+    { key: 'PLACA',     label: 'Placa / ID' },
+    { key: 'NOMBRE',    label: 'Nombre Completo' },
+    { key: 'DOCUMENTO', label: 'Documento' },
+    { key: 'TELEFONO',  label: 'Teléfono' },
+    { key: 'WHATSAPP',  label: 'Link WhatsApp' },
+    { key: 'EMPRESA',   label: 'Empresa' },
+    { key: 'CONCEPTO',  label: 'Concepto' },
+    { key: 'AL_DIA',    label: 'Al Día' },
+    { key: 'D30',       label: '30 días' },
+    { key: 'D60',       label: '60 días' },
+    { key: 'D90',       label: '90 días' },
+    { key: 'D120',      label: '120 días' },
+    { key: 'DMAS120',   label: '+120 días' },
+    { key: 'TOTAL',     label: 'Total' },
+  ];
+
+  const empLabel = e => EMP_CONFIG[e]?.label || e;
+
+  // Fila de encabezado
+  let csv = '\uFEFF'; // BOM para que Excel abra bien tildes
+  csv += cols.map(c => `"${c.label}"`).join(';') + '\n';
+
+  // Fila de totales del filtro
+  const t = calcTotals(filtered);
+  const totalRow = {
+    PLACA: 'TOTAL FILTRO', NOMBRE: `${filtered.length} registros`,
+    DOCUMENTO: '', TELEFONO: '', WHATSAPP: '',
+    EMPRESA: '', CONCEPTO: '',
+    AL_DIA: t.aldia, D30: t.d30, D60: t.d60,
+    D90: t.d90, D120: t.d120, DMAS120: t.dmas120, TOTAL: t.total,
+  };
+  csv += cols.map(c => {
+    const v = totalRow[c.key];
+    return typeof v === 'number' ? String(Math.round(v)) : `"${v||''}"`;
+  }).join(';') + '\n';
+  csv += cols.map(() => '""').join(';') + '\n'; // fila vacía separadora
+
+  // Datos
+  filtered.forEach(r => {
+    const waLink = linkWhatsApp(r.TELEFONO, r.NOMBRE, r.TOTAL);
+    const row = { ...r, EMPRESA: empLabel(r.EMPRESA), WHATSAPP: waLink };
+    csv += cols.map(c => {
+      const v = row[c.key];
+      if (v === undefined || v === null || v === '') return '""';
+      if (typeof v === 'number') return String(Math.round(v));
+      return `"${String(v).replace(/"/g, '""')}"`;
+    }).join(';') + '\n';
+  });
+
+  // Construir etiqueta del filtro para el nombre del archivo
+  const partes = [];
+  if (filterEmp !== 'ALL') partes.push(EMP_CONFIG[filterEmp]?.label || filterEmp);
+  if (filterConcepto !== 'ALL') partes.push(filterConcepto.substring(0,20));
+  if (filterEdad !== 'ALL') partes.push(filterEdad === 'AL_DIA' ? 'AlDia' : filterEdad + 'dias');
+  const sufijo = partes.length > 0 ? '_' + partes.join('_').replace(/\s+/g,'_') : '_TodosLosFiltros';
+  const fecha = new Date().toISOString().slice(0,10);
+  const filename = `Cartera${sufijo}_${fecha}.csv`;
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function parseCSV(csv) {
   // Parser robusto: maneja celdas con saltos de línea, comas y comillas internas
   const records = parseCSVRobust(csv);
@@ -401,10 +497,13 @@ function parseCSV(csv) {
     headers.forEach((h, idx) => { row[h] = (vals[idx] || '').replace(/"/g,'').trim(); });
 
     const mapped = {};
-    mapped['PLACA']    = row['PLACA'] || row['placa'] || '';
-    mapped['CONCEPTO'] = row['CONCEPTO'] || row['Concepto'] || row['concepto'] || '';
-    mapped['NOMBRE']   = ((row['NOMBRE'] || row['Nombre'] || '') + ' ' + (row['APELLIDOS'] || row['Apellidos'] || '')).trim();
-    mapped['EMPRESA']  = row['EMPRESA'] || row['Empresa'] || '';
+    mapped['PLACA']     = row['PLACA'] || row['placa'] || '';
+    mapped['CONCEPTO']  = row['CONCEPTO'] || row['Concepto'] || row['concepto'] || '';
+    mapped['NOMBRE']    = ((row['NOMBRE'] || row['Nombre'] || '') + ' ' + (row['APELLIDOS'] || row['Apellidos'] || '')).trim();
+    mapped['EMPRESA']   = row['EMPRESA'] || row['Empresa'] || '';
+    mapped['DOCUMENTO'] = row['DOCUMENTO'] || row['Documento'] || row['documento'] || '';
+    mapped['TELEFONO']  = limpiarTel(row['TELEFONO'] || row['Telefono'] || row['telefono'] || row['TEL'] || '');
+    mapped['DIRECCION'] = row['DIRECCION'] || row['Direccion'] || row['direccion'] || '';
     mapped['AL_DIA']   = parseNum(row['AL DIA'] || row['al dia'] || row['AL_DIA'] || '');
     mapped['D30']      = parseNum(row['30 DIAS'] || row['30 dias'] || row['D30'] || '');
     mapped['D60']      = parseNum(row['60 DIAS'] || row['60 dias'] || row['D60'] || '');
@@ -836,6 +935,9 @@ function renderFiltroResumen() {
           <div style="font-size:11px;color:var(--text2)">TOTAL</div>
           <div style="font-size:18px;font-weight:800;color:var(--text)" title="${fFull(t.total)}">${fCOP(t.total)}</div>
         </div>
+        <button onclick="exportarExcel()" style="margin-left:8px;background:#25D366;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+          ⬇ Exportar Excel
+        </button>
       </div>
     </div>`;
 }
