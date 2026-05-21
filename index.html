@@ -1,1 +1,40 @@
-
+/ INTERACTIVIDAD
+// ============================================================
+function setFilterEmp(e) { filterEmp = e; applyFilters(); render(); }
+function setFilterEdad(e) { filterEdad = e; applyFilters(); renderTabla(); }
+function onSearch(v) { searchQ = v; applyFilters(); renderTabla(); }
+function setSort(col) {
+  if (sortCol === col) sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+  else { sortCol = col; sortDir = 'desc'; }
+  applyFilters(); renderTabla();
+}
+function goPage(p) { currentPage = p; renderTabla(); }
+ 
+// ============================================================
+// MODAL
+// ============================================================
+function cerrarModal() { document.getElementById('modalBg').classList.remove('show'); }
+ 
+// ============================================================
+// SETUP (si Sheets vacío)
+// ============================================================
+function showSetup() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="setup-box">
+      <div class="setup-title">Sheets conectado ✓ — Agrega datos para comenzar</div>
+      <div class="setup-sub">El Google Sheets está correctamente conectado, pero la pestaña DATA no tiene registros aún. Sigue estos pasos:</div>
+      <div class="setup-step"><div class="step-num">1</div><div class="step-text">Abre el Google Sheets y ve a la pestaña <code>DATA</code></div></div>
+      <div class="setup-step"><div class="step-num">2</div><div class="step-text">Asegúrate que la fila 1 tenga los encabezados: <code>PLACA, NOMBRE, CONCEPTO, EMPRESA, AL_DIA, D30, D60, D90, D120, DMAS120, TOTAL</code></div></div>
+      <div class="setup-step"><div class="step-num">3</div><div class="step-text">Pega los datos del reporte de cartera a partir de la fila 2</div></div>
+      <div class="setup-step"><div class="step-num">4</div><div class="step-text">Haz clic en <strong>↻ Actualizar</strong> arriba a la derecha</div></div>
+    </div>`;
+}
+ 
+// ============================================================
+// INIT
+// ============================================================
+loadData();
+</script>
+</body>
+</html>
+ 
