@@ -324,13 +324,18 @@ async function loadData() {
       <div class="loading-text">Leyendo Google Sheets...</div>
     </div>`;
 
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&sheet=${encodeURIComponent(SHEET_TAB)}`;
 
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('No se pudo leer el Sheets. Verifica que sea público.');
     const csv = await res.text();
+    console.log('=== CSV RECIBIDO ===');
+    console.log('Caracteres totales:', csv.length);
+    console.log('Líneas totales:', csv.split('\n').length);
+    console.log('Primeros 500 chars:', csv.substring(0, 500));
     allData = parseCSV(csv);
+    console.log('Registros parseados:', allData.length);
     if (allData.length === 0) {
       showSetup();
       return;
@@ -853,4 +858,4 @@ function showSetup() {
 loadData();
 </script>
 </body>
-</html>
+</html>   
