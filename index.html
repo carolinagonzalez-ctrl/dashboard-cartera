@@ -189,6 +189,13 @@
   .badge-celu { background: rgba(0,212,138,.12); color: var(--green); }
   .badge-otro { background: rgba(138,147,170,.1); color: var(--text2); }
 
+  /* BADGES NIVEL DE COBRO */
+  .badge-aldia      { background: rgba(99,153,34,.15);  color: #639922; }
+  .badge-preventivo { background: rgba(74,144,226,.15); color: #4a90e2; }
+  .badge-activo     { background: rgba(239,159,39,.15); color: #EF9F27; }
+  .badge-prejudicial{ background: rgba(216,90,48,.15);  color: #D85A30; }
+  .badge-juridico   { background: rgba(121,31,31,.25);  color: #c94040; }
+
   /* PAGINATION */
   .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--border); }
   .page-info { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
@@ -311,6 +318,7 @@ let sortDir = 'desc';
 let filterEmp = 'ALL';
 let filterEdad = 'ALL';
 let filterConcepto = 'ALL';
+let filterNivel = 'ALL';
 let searchQ = '';
 let charts = {};
 
@@ -387,6 +395,7 @@ function exportarExcel() {
     { key: 'DOCUMENTO', label: 'Documento' },
     { key: 'TELEFONO',  label: 'Teléfono' },
     { key: 'WHATSAPP',  label: 'Link WhatsApp' },
+    { key: 'NIVEL',     label: 'Nivel Cobro' },
     { key: 'EMPRESA',   label: 'Empresa' },
     { key: 'CONCEPTO',  label: 'Concepto' },
     { key: 'AL_DIA',    label: 'Al Día' },
@@ -422,7 +431,7 @@ function exportarExcel() {
   // Datos
   filtered.forEach(r => {
     const waLink = linkWhatsApp(r.TELEFONO, r.NOMBRE, r.TOTAL);
-    const row = { ...r, EMPRESA: empLabel(r.EMPRESA), WHATSAPP: waLink };
+    const row = { ...r, EMPRESA: empLabel(r.EMPRESA), WHATSAPP: waLink, NIVEL: NIVEL_CONFIG[getNivel(r)]?.label || '' };
     csv += cols.map(c => {
       const v = row[c.key];
       if (v === undefined || v === null || v === '') return '""';
@@ -590,6 +599,25 @@ function parseCSVRobust(text) {
   return records.filter(r => r.some(c => c.trim() !== ''));
 }
 
+// ============================================================
+// NIVELES DE COBRO
+// ============================================================
+const NIVEL_CONFIG = {
+  'JURIDICO':    { label: 'Jurídico',          badge: 'badge-juridico',    color: '#791F1F', orden: 5 },
+  'PREJUDICIAL': { label: 'Pre-Jurídico',       badge: 'badge-prejudicial', color: '#D85A30', orden: 4 },
+  'ACTIVO':      { label: 'Gestión Activa',     badge: 'badge-activo',      color: '#EF9F27', orden: 3 },
+  'PREVENTIVO':  { label: 'Gestión Preventiva', badge: 'badge-preventivo',  color: '#4a90e2', orden: 2 },
+  'ALDIA':       { label: 'Al Día',             badge: 'badge-aldia',       color: '#639922', orden: 1 },
+};
+
+function getNivel(r) {
+  if (r.DMAS120 > 0) return 'JURIDICO';
+  if (r.D120    > 0) return 'PREJUDICIAL';
+  if (r.D60     > 0) return 'ACTIVO';
+  if (r.D30     > 0) return 'PREVENTIVO';
+  return 'ALDIA';
+}
+
 function detectEmpresa(concepto) {
   const c = concepto.toUpperCase().trim();
   // Mapeo exacto por concepto
@@ -625,19 +653,19 @@ function normalizeEmpresa(e) {
 // ============================================================
 function applyFilters() {
   filtered = allData.filter(r => {
-    const matchEmp = filterEmp === 'ALL' || r.EMPRESA === filterEmp;
-    const matchConcepto = filterConcepto === 'ALL' || r.CONCEPTO === filterConcepto;
-    // Tramo: mostrar registros que TIENEN saldo > 0 en ese tramo
+    const matchEmp     = filterEmp     === 'ALL' || r.EMPRESA === filterEmp;
+    const matchConcepto= filterConcepto=== 'ALL' || r.CONCEPTO === filterConcepto;
+    const matchNivel   = filterNivel   === 'ALL' || getNivel(r) === filterNivel;
     let matchEdad = true;
     if (filterEdad === 'AL_DIA') matchEdad = r.AL_DIA > 0;
-    else if (filterEdad === '30')  matchEdad = r.D30 > 0;
-    else if (filterEdad === '60')  matchEdad = r.D60 > 0;
-    else if (filterEdad === '90')  matchEdad = r.D90 > 0;
-    else if (filterEdad === '120') matchEdad = r.D120 > 0;
+    else if (filterEdad === '30')   matchEdad = r.D30 > 0;
+    else if (filterEdad === '60')   matchEdad = r.D60 > 0;
+    else if (filterEdad === '90')   matchEdad = r.D90 > 0;
+    else if (filterEdad === '120')  matchEdad = r.D120 > 0;
     else if (filterEdad === '+120') matchEdad = r.DMAS120 > 0;
     const q = searchQ.toLowerCase();
     const matchQ = !q || (r.PLACA||'').toLowerCase().includes(q) || (r.NOMBRE||'').toLowerCase().includes(q);
-    return matchEmp && matchEdad && matchConcepto && matchQ;
+    return matchEmp && matchEdad && matchConcepto && matchNivel && matchQ;
   });
   filtered.sort((a, b) => {
     const av = a[sortCol] !== undefined ? a[sortCol] : '';
@@ -760,6 +788,15 @@ function render() {
     <!-- TABLA -->
     <div class="sec">Detalle por Vehículo / Afiliado</div>
 
+    <div class="filter-row">
+      <span class="filter-label">Nivel:</span>
+      <button class="filter-btn ${filterNivel==='ALL'?'active':''}" onclick="setFilterNivel('ALL')">Todos</button>
+      ${Object.entries(NIVEL_CONFIG).sort((a,b)=>b[1].orden-a[1].orden).map(([key,cfg])=>`
+        <button class="filter-btn ${filterNivel===key?'active':''}" onclick="setFilterNivel('${key}')"
+          style="${filterNivel===key?`border-color:${cfg.color};color:${cfg.color};background:${cfg.color}22`:''}">
+          <span class="badge ${cfg.badge}" style="margin-right:4px;font-size:9px">${cfg.label}</span>
+        </button>`).join('')}
+    </div>
     <div class="filter-row">
       <span class="filter-label">Empresa:</span>
       <button class="filter-btn ${filterEmp==='ALL'?'active':''}" onclick="setFilterEmp('ALL')">Todas</button>
@@ -895,49 +932,68 @@ function renderFiltroResumen() {
   if (filterEmp !== 'ALL') etiquetas.push(EMP_CONFIG[filterEmp]?.label || filterEmp);
   if (filterConcepto !== 'ALL') etiquetas.push(filterConcepto);
   if (filterEdad !== 'ALL') etiquetas.push(filterEdad === 'AL_DIA' ? 'Al día' : filterEdad + ' días');
+  if (filterNivel !== 'ALL') etiquetas.push(NIVEL_CONFIG[filterNivel]?.label || filterNivel);
   if (searchQ) etiquetas.push(`"${searchQ}"`);
 
+  // Conteo por nivel para mostrar en cajita
+  const porNivel = {};
+  Object.keys(NIVEL_CONFIG).forEach(k => { porNivel[k] = { count: 0, total: 0 }; });
+  filtered.forEach(r => { const n = getNivel(r); porNivel[n].count++; porNivel[n].total += r.TOTAL; });
+
   el.innerHTML = `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:18px;align-items:center">
-      <div style="font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em">
-        ${hayFiltro ? '📊 Filtro activo: ' + etiquetas.join(' · ') : '📊 Totales generales'}
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:12px">
+      <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em">
+          ${hayFiltro ? '📊 Filtro activo: ' + etiquetas.join(' · ') : '📊 Totales generales'}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-left:auto;align-items:center">
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">Registros</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)">${filtered.length.toLocaleString('es-CO')}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">Al Día</div>
+            <div style="font-size:16px;font-weight:700;color:var(--green)" title="${fFull(t.aldia)}">${fCOP(t.aldia)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">30d</div>
+            <div style="font-size:16px;font-weight:700;color:var(--text)" title="${fFull(t.d30)}">${fCOP(t.d30)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">60d</div>
+            <div style="font-size:16px;font-weight:700;color:#f5c542" title="${fFull(t.d60)}">${fCOP(t.d60)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">90d</div>
+            <div style="font-size:16px;font-weight:700;color:#f58c42" title="${fFull(t.d90)}">${fCOP(t.d90)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">120d</div>
+            <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.d120)}">${fCOP(t.d120)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:11px;color:var(--text2)">+120d</div>
+            <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.dmas120)}">${fCOP(t.dmas120)}</div>
+          </div>
+          <div style="text-align:center;border-left:1px solid var(--border);padding-left:12px">
+            <div style="font-size:11px;color:var(--text2)">TOTAL</div>
+            <div style="font-size:18px;font-weight:800;color:var(--text)" title="${fFull(t.total)}">${fCOP(t.total)}</div>
+          </div>
+          <button onclick="exportarExcel()" style="margin-left:8px;background:#25D366;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+            ⬇ Exportar Excel
+          </button>
+        </div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-left:auto">
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">Registros</div>
-          <div style="font-size:16px;font-weight:700;color:var(--text)">${filtered.length.toLocaleString('es-CO')}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">Al Día</div>
-          <div style="font-size:16px;font-weight:700;color:var(--green)" title="${fFull(t.aldia)}">${fCOP(t.aldia)}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">30d</div>
-          <div style="font-size:16px;font-weight:700;color:var(--text)" title="${fFull(t.d30)}">${fCOP(t.d30)}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">60d</div>
-          <div style="font-size:16px;font-weight:700;color:#f5c542" title="${fFull(t.d60)}">${fCOP(t.d60)}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">90d</div>
-          <div style="font-size:16px;font-weight:700;color:#f58c42" title="${fFull(t.d90)}">${fCOP(t.d90)}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">120d</div>
-          <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.d120)}">${fCOP(t.d120)}</div>
-        </div>
-        <div style="text-align:center">
-          <div style="font-size:11px;color:var(--text2)">+120d</div>
-          <div style="font-size:16px;font-weight:700;color:var(--red)" title="${fFull(t.dmas120)}">${fCOP(t.dmas120)}</div>
-        </div>
-        <div style="text-align:center;border-left:1px solid var(--border);padding-left:12px">
-          <div style="font-size:11px;color:var(--text2)">TOTAL</div>
-          <div style="font-size:18px;font-weight:800;color:var(--text)" title="${fFull(t.total)}">${fCOP(t.total)}</div>
-        </div>
-        <button onclick="exportarExcel()" style="margin-left:8px;background:#25D366;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-          ⬇ Exportar Excel
-        </button>
+      <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span style="font-size:10px;color:var(--text2);font-family:var(--font-mono);text-transform:uppercase;margin-right:4px">Por nivel:</span>
+        ${Object.entries(NIVEL_CONFIG).sort((a,b)=>b[1].orden-a[1].orden).map(([key,cfg])=>`
+          <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer"
+               onclick="setFilterNivel('${key}')">
+            <span class="badge ${cfg.badge}" style="font-size:9px">${cfg.label}</span>
+            <span style="font-size:11px;font-weight:700;color:var(--text)">${porNivel[key].count.toLocaleString('es-CO')}</span>
+            <span style="font-size:10px;color:var(--text2)">${fCOP(porNivel[key].total)}</span>
+          </div>`).join('')}
+        ${filterNivel !== 'ALL' ? `<button onclick="setFilterNivel('ALL')" style="font-size:10px;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text2);cursor:pointer">✕ Limpiar nivel</button>` : ''}
       </div>
     </div>`;
 }
@@ -952,17 +1008,18 @@ function renderTabla() {
   const slice = filtered.slice(start, start + ROWS_PER_PAGE);
 
   const cols = [
-    { key: 'PLACA', label: 'Placa / ID' },
-    { key: 'NOMBRE', label: 'Nombre' },
-    { key: 'EMPRESA', label: 'Empresa' },
+    { key: 'PLACA',    label: 'Placa / ID' },
+    { key: 'NOMBRE',   label: 'Nombre' },
+    { key: 'EMPRESA',  label: 'Empresa' },
+    { key: 'NIVEL',    label: 'Nivel Cobro' },
     { key: 'CONCEPTO', label: 'Concepto' },
-    { key: 'AL_DIA', label: 'Al día' },
-    { key: 'D30', label: '30d' },
-    { key: 'D60', label: '60d' },
-    { key: 'D90', label: '90d' },
-    { key: 'D120', label: '120d' },
-    { key: 'DMAS120', label: '+120d' },
-    { key: 'TOTAL', label: 'Total' },
+    { key: 'AL_DIA',   label: 'Al día' },
+    { key: 'D30',      label: '30d' },
+    { key: 'D60',      label: '60d' },
+    { key: 'D90',      label: '90d' },
+    { key: 'D120',     label: '120d' },
+    { key: 'DMAS120',  label: '+120d' },
+    { key: 'TOTAL',    label: 'Total' },
   ];
 
   const thHTML = cols.map(c => {
@@ -974,10 +1031,13 @@ function renderTabla() {
     ? `<tr><td colspan="${cols.length}" class="empty">Sin resultados para los filtros aplicados</td></tr>`
     : slice.map(r => {
         const cfg = EMP_CONFIG[r.EMPRESA] || EMP_CONFIG['OTRO'];
+        const nKey = getNivel(r);
+        const nCfg = NIVEL_CONFIG[nKey];
         return `<tr>
           <td class="placa">${r.PLACA || '—'}</td>
           <td>${r.NOMBRE || '—'}</td>
           <td><span class="badge ${cfg.badge}">${cfg.label}</span></td>
+          <td><span class="badge ${nCfg.badge}">${nCfg.label}</span></td>
           <td style="color:var(--text2);max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${r.CONCEPTO||''}">${r.CONCEPTO || '—'}</td>
           <td class="num ok">${r.AL_DIA > 0 ? fCOP(r.AL_DIA) : '—'}</td>
           <td class="num">${r.D30 > 0 ? fCOP(r.D30) : '—'}</td>
@@ -1010,10 +1070,11 @@ function renderTabla() {
 // ============================================================
 // INTERACTIVIDAD
 // ============================================================
-function setFilterEmp(e) { filterEmp = e; applyFilters(); render(); }
-function setFilterEdad(e) { filterEdad = e; applyFilters(); renderTabla(); }
-function setFilterConcepto(c) { filterConcepto = c; applyFilters(); renderTabla(); }
-function onSearch(v) { searchQ = v; applyFilters(); renderTabla(); }
+function setFilterEmp(e)      { filterEmp = e;       applyFilters(); render(); }
+function setFilterEdad(e)     { filterEdad = e;      applyFilters(); renderTabla(); }
+function setFilterConcepto(c) { filterConcepto = c;  applyFilters(); renderTabla(); }
+function setFilterNivel(n)    { filterNivel = n;     applyFilters(); render(); }
+function onSearch(v)          { searchQ = v;         applyFilters(); renderTabla(); }
 function setSort(col) {
   if (sortCol === col) sortDir = sortDir === 'desc' ? 'asc' : 'desc';
   else { sortCol = col; sortDir = 'desc'; }
