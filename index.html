@@ -477,7 +477,8 @@ function parseCSV(csv) {
       }
     } else if (hasComma && !hasDot) {
       const parts = s.split(',');
-      if (parts.length === 2 && parts[1].length === 3) {
+      const esMiles = parts.length > 1 && parts.slice(1).every(p => p.length === 3);
+      if (esMiles) {
         s = s.replace(/,/g,'');
       } else {
         s = s.replace(',','.');
